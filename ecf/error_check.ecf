@@ -1,0 +1,77 @@
+#PBS -N stofs_error_check_%CYC%
+#PBS -A %PROJ%-%PROJENVIR%
+#PBS -q %QUEUE%
+#PBS -j oe
+#PBS -S /bin/bash
+#PBS -l select=1:ncpus=1:mem=1GB
+#PBS -l walltime=00:05:00
+#PBS -l debug=true
+
+set -x
+date
+
+cd $DATA
+
+# Check for error indicators in log files
+check_logs() {
+    local system=$1
+    local log_dir="${COMROOT}/logs/${system,,}"
+    
+    # Check for error keywords in logs
+    if grep -i "error\|fatal\|failed" ${log_dir}/*.log 2>/dev/null; then
+        echo "FATAL ERROR: Found errors in ${system} logs"
+        return 1
+    fi
+    
+    # Check for any core dumps
+    if ls core.* 1>/dev/null 2>&1; then
+        echo "FATAL ERROR: Found core dumps in working directory"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Check disk space
+check_disk_space() {
+    local min_space=10485760  # 10 GB in KB
+    
+    available_space=$(df -k . | awk 'NR==2 {print $4}')
+    if [ $available_space -lt $min_space ]; then
+        echo "WARNING: Low disk space. Available: $available_space KB"
+        return 1
+    fi
+    return 0
+}
+
+# Main error checking
+echo "Starting error checks for ${FORECAST_SYSTEM}"
+
+# Check logs
+check_logs ${FORECAST_SYSTEM}
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+# Check disk space
+check_disk_space
+if [ $? -ne 0 ]; then
+    echo "WARNING: Disk space check failed"
+fi
+
+# System-specific checks
+case ${FORECAST_SYSTEM} in
+    "STOFS3D")
+        # Add any STOFS3D specific checks
+        ;;
+    "STOFS2D")
+        # Add any STOFS2D specific checks
+        ;;
+    "NOSOFS")
+        # Add any NOSOFS specific checks
+        ;;
+esac
+
+echo "Error checking completed successfully"
+date
+exit 0

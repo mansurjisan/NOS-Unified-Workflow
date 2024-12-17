@@ -1,0 +1,51 @@
+#PBS -N stofs_init_%CYC%
+#PBS -A %PROJ%-%PROJENVIR%
+#PBS -q %QUEUE%
+#PBS -j oe
+#PBS -S /bin/bash
+#PBS -l select=1:ncpus=1:mem=1GB
+#PBS -l walltime=00:05:00
+#PBS -l debug=true
+
+set -x
+date
+
+# Verify forecast system selection
+if [[ ! "${FORECAST_SYSTEM}" =~ ^(STOFS3D|STOFS2D|NOSOFS)$ ]]; then
+    echo "FATAL ERROR: Invalid FORECAST_SYSTEM: ${FORECAST_SYSTEM}"
+    echo "Must be one of: STOFS3D, STOFS2D, NOSOFS"
+    exit 1
+fi
+
+# Verify critical paths exist
+if [ "${FORECAST_SYSTEM}" == "STOFS3D" ] || [ "${FORECAST_SYSTEM}" == "STOFS2D" ]; then
+    if [ ! -d "${STOFS_HOME}" ]; then
+        echo "FATAL ERROR: STOFS_HOME directory not found: ${STOFS_HOME}"
+        exit 1
+    fi
+fi
+
+if [ "${FORECAST_SYSTEM}" == "NOSOFS" ]; then
+    if [ ! -d "${NOSOFS_HOME}" ]; then
+        echo "FATAL ERROR: NOSOFS_HOME directory not found: ${NOSOFS_HOME}"
+        exit 1
+    fi
+fi
+
+# Set up cycling information
+export cycle=t${cyc}z
+export PDY=${PDY:-$(date -u +%Y%m%d)}
+
+# Create working directory
+export DATA=${DATA:-${DATAROOT}/${jobid}}
+mkdir -p $DATA
+cd $DATA
+
+# Write initialization information to log
+echo "Initialization complete for ${FORECAST_SYSTEM}"
+echo "Cycle: ${cycle}"
+echo "Date: ${PDY}"
+echo "Queue: ${QUEUE}"
+
+date
+exit 0

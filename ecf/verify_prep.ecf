@@ -1,0 +1,93 @@
+#PBS -N stofs_verify_%CYC%
+#PBS -A %PROJ%-%PROJENVIR%
+#PBS -q %QUEUE%
+#PBS -j oe
+#PBS -S /bin/bash
+#PBS -l select=1:ncpus=1:mem=2GB
+#PBS -l walltime=00:10:00
+#PBS -l debug=true
+
+set -x
+date
+
+cd $DATA
+
+# Define system-specific verification functions
+verify_stofs3d() {
+    # Check STOFS3D specific prep outputs
+    local required_files=(
+        "${COMOUT}/stofs_3d_atl.t${cyc}z.fields.nc"
+        "${COMOUT}/stofs_3d_atl.t${cyc}z.ini.nc"
+    )
+    
+    for file in "${required_files[@]}"; do
+        if [ ! -f "$file" ]; then
+            echo "FATAL ERROR: Required STOFS3D output missing: $file"
+            return 1
+        fi
+        
+        # Check file size
+        size=$(stat -c%s "$file")
+        if [ $size -lt 1000 ]; then
+            echo "FATAL ERROR: File too small: $file (size: $size bytes)"
+            return 1
+        fi
+    done
+    return 0
+}
+
+verify_stofs2d() {
+    # Check STOFS2D specific prep outputs
+    local required_files=(
+        "${COMOUT}/stofs_2d_glo.t${cyc}z.prep.complete"
+    )
+    
+    for file in "${required_files[@]}"; do
+        if [ ! -f "$file" ]; then
+            echo "FATAL ERROR: Required STOFS2D output missing: $file"
+            return 1
+        fi
+    done
+    return 0
+}
+
+verify_nosofs() {
+    # Check NOSOFS specific prep outputs
+    local required_files=(
+        "${COMOUT}/nos.${OFS}.prep.t${cyc}z.log"
+    )
+    
+    for file in "${required_files[@]}"; do
+        if [ ! -f "$file" ]; then
+            echo "FATAL ERROR: Required NOSOFS output missing: $file"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Main verification logic
+case ${FORECAST_SYSTEM} in
+    "STOFS3D")
+        verify_stofs3d
+        ;;
+    "STOFS2D")
+        verify_stofs2d
+        ;;
+    "NOSOFS")
+        verify_nosofs
+        ;;
+    *)
+        echo "FATAL ERROR: Unknown system: ${FORECAST_SYSTEM}"
+        exit 1
+        ;;
+esac
+
+if [ $? -ne 0 ]; then
+    echo "Verification failed for ${FORECAST_SYSTEM}"
+    exit 1
+fi
+
+echo "Verification completed successfully for ${FORECAST_SYSTEM}"
+date
+exit 0
