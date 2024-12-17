@@ -1,0 +1,103 @@
+suite nos_prep_suite
+
+    # Base directories
+
+    edit STOFS_HOME '/lfs/h1/nos/estofs/noscrub/mansur.jisan/packages/IT-stofs.v2.1.0'
+    edit NOSOFS_HOME '/lfs/h1/nos/nosofs/noscrub/mansur.jisan/packages/nosofs.v3.6.4'
+    edit ECF_HOME '/home/mjisan/workflow'
+    
+    # ECF file locations
+
+    edit ECF_FILES_STOFS '%STOFS_HOME%/ecf'
+    edit ECF_FILES_NOSOFS '%NOSOFS_HOME%/ecf'
+    edit ECF_INCLUDE '/u/mansur.jisan/workflow'
+    
+    # System configuration
+
+    edit FORECAST_SYSTEM 'STOFS3D'     # Options: 'STOFS3D', 'STOFS2D', 'NOSOFS'
+    edit QUEUE 'dev'                   # Options: 'dev', 'prod'
+    
+    # Common variables
+
+    edit PROJ "ESTOFS-DEV"
+    edit PROJENVIR "dev"
+    
+    family preprocess
+
+        # Initialize environment
+
+	task init
+            edit ECF_SCRIPT '%ECF_HOME%/init.ecf'       
+            
+        # STOFS3D preprocessing tasks
+
+	family stofs3d
+            trigger ../init == complete and '%FORECAST_SYSTEM%' == 'STOFS3D'
+            
+            task prep
+                edit ECF_SCRIPT '%ECF_FILES_STOFS%/jstofs_3d_atl_prep.ecf'
+                label kind 'preprocessing'
+                meter progress 0 100
+
+	endfamily
+        
+        # STOFS2D preprocessing tasks; I haven't worked on running the 2D-Global yet but these are, I believe, part of the preprocessing of this system.
+
+	family stofs2d
+            trigger ../init == complete and '%FORECAST_SYSTEM%' == 'STOFS2D'
+            
+            task adcprep
+
+                edit ECF_SCRIPT '%ECF_FILES_STOFS%/jstofs_2d_glo_cold_adcprep.ecf'
+                label kind '2d-global preprocessing'
+                meter progress 0 100
+
+	    task cold_spinup
+                trigger ./adcprep == complete
+                edit ECF_SCRIPT '%ECF_FILES_STOFS%/jstofs_2d_glo_cold_spinup.ecf'
+		label kind '2d-global spinup'
+		meter progress 0 100
+		
+            task prep_nowcast
+                trigger ./cold_spinup == complete
+                edit ECF_SCRIPT '%ECF_FILES_STOFS%/jstofs_2d_glo_prep_nowcast.ecf'
+		label kind '2d-global nowcast preprocessing'
+		meter progress 0 100
+	endfamily
+        
+        # NOSOFS preprocessing tasks
+
+	family nosofs
+            trigger ../init == complete and '%FORECAST_SYSTEM%' == 'NOSOFS'
+            
+            task prep
+
+	    	edit ECF_SCRIPT '%ECF_FILES_NOSOFS%/jnos_ofs_prep.ecf'
+                label kind 'nosofs preprocessing'
+		meter progress 0 100
+
+        endfamily
+        
+        # Verification tasks
+
+	task verify_prep
+	    trigger stofs3d == complete or stofs2d == complete or nosofs == complete
+
+	    edit ECF_SCRIPT '%ECF_HOME%/verify_prep.ecf'
+            
+        # Error handling and cleanup
+
+	task error_check
+            trigger ./verify_prep == complete
+
+	    edit ECF_SCRIPT '%ECF_HOME%/error_check.ecf'
+    endfamily
+    
+    # Scheduling
+
+    clock real
+
+    # Default operational schedule
+
+    cron 00:00 06:00 12:00 18:00
+endsuite
